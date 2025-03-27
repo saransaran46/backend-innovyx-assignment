@@ -9,11 +9,10 @@ from django.core.files.base import ContentFile
 from datetime import datetime
 from django.db import transaction
 
-
-from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
+from django.contrib.auth import authenticate, login, logout
 
 
 @csrf_exempt
@@ -423,13 +422,6 @@ def order_history(request):
 
 
 
-from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User
-from django.views.decorators.csrf import csrf_exempt
-from rest_framework.authtoken.models import Token
-
-
-
 @csrf_exempt
 def register_user(request):
     if request.method == 'POST':
@@ -463,7 +455,6 @@ def register_user(request):
                 password=password
             )
 
-            # Create a token for the new user
             token = Token.objects.create(user=user)
 
             return JsonResponse({
@@ -505,7 +496,6 @@ def login_user(request):
 
             if user is not None:
                 login(request, user)
-                # Get or create token for the user
                 token, created = Token.objects.get_or_create(user=user)
                 return JsonResponse({
                     'success': True,
@@ -537,7 +527,6 @@ def login_user(request):
 def logout_user(request):
     if request.method == 'POST':
         try:
-            # Delete the token if using TokenAuthentication
             if hasattr(request, 'auth'):
                 request.auth.delete()
             logout(request)
