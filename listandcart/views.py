@@ -9,32 +9,36 @@ from django.core.files.base import ContentFile
 from datetime import datetime
 from django.db import transaction
 
+
+from django.contrib.auth import authenticate
+from rest_framework.authtoken.models import Token
+from django.contrib.auth.models import User
+from django.shortcuts import get_object_or_404
+
+
 @csrf_exempt
 def create_product(request):
     if request.method == 'POST':
         try:
-            # Handle form data (including file upload)
             if request.content_type.startswith('multipart/form-data'):
                 name = request.POST.get('name')
                 price = request.POST.get('price')
                 description = request.POST.get('description')
                 image_file = request.FILES.get('image')
 
-                # Validate required fields
                 if not all([name, price, description]):
                     return JsonResponse(
                         {'error': 'Name, price, and description are required'},
                         status=400
                     )
 
-                # Create product
                 product = Product(
                     name=name,
-                    price=float(price),  # Convert to float
+                    price=float(price),
                     description=description
                 )
 
-                # Handle image upload
+               
                 if image_file:
                     file_name = default_storage.save(
                         f'products/{datetime.now().timestamp()}_{image_file.name}',
@@ -52,21 +56,21 @@ def create_product(request):
                     'image': request.build_absolute_uri(product.image.url) if product.image else None,
                 }, status=201)
 
-            # Handle JSON data
+           
             elif request.content_type == 'application/json':
                 data = json.loads(request.body)
                 
-                # Validate required fields
+                
                 if not all([data.get('name'), data.get('price'), data.get('description')]):
                     return JsonResponse(
                         {'error': 'Name, price, and description are required'},
                         status=400
                     )
 
-                # Create product
+                
                 product = Product.objects.create(
                     name=data['name'],
-                    price=float(data['price']),  # Convert to float
+                    price=float(data['price']),
                     description=data['description']
                 )
 
@@ -75,7 +79,7 @@ def create_product(request):
                     'name': product.name,
                     'price': str(product.price),
                     'description': product.description,
-                    'image': None,  # Images can't be uploaded via JSON
+                    'image': None,
                     'created_at': product.created_at.strftime('%Y-%m-%d %H:%M:%S')
                 }, status=201)
 
@@ -111,31 +115,23 @@ def product_list(request):
             })
         return JsonResponse(data, safe=False)
 
-from django.contrib.auth import authenticate
-from rest_framework.authtoken.models import Token
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth.models import User
-from django.shortcuts import get_object_or_404
-import json
+
 
 @csrf_exempt
 def add_to_cart(request):
     if request.method == 'POST':
         try:
-            # Extract token from headers
             auth_header = request.headers.get('Authorization')
             if not auth_header or not auth_header.startswith('Token '):
                 return JsonResponse({'error': 'Token authentication required'}, status=401)
             
-            token_key = auth_header.split(' ')[1]  # Extract the token key
+            token_key = auth_header.split(' ')[1]
             try:
                 token = Token.objects.get(key=token_key)
-                user = token.user  # Get the authenticated user
+                user = token.user
             except Token.DoesNotExist:
                 return JsonResponse({'error': 'Invalid token'}, status=401)
 
-            # Process the request data
             data = json.loads(request.body)
             product_id = data.get('product_id')
             quantity = data.get('quantity', 1)
@@ -146,7 +142,7 @@ def add_to_cart(request):
             product = get_object_or_404(Product, id=product_id)
             
             cart_item, created = Cart.objects.get_or_create(
-                user=user,  # Use the authenticated user
+                user=user,
                 product=product,
                 defaults={'quantity': quantity}
             )
@@ -169,7 +165,6 @@ def add_to_cart(request):
 def view_cart(request):
     if request.method == 'GET':
         try:
-            # Token authentication
             auth_header = request.headers.get('Authorization')
             if not auth_header or not auth_header.startswith('Token '):
                 return JsonResponse({'error': 'Token authentication required'}, status=401)
@@ -181,7 +176,6 @@ def view_cart(request):
             except Token.DoesNotExist:
                 return JsonResponse({'error': 'Invalid token'}, status=401)
 
-            # Get cart items for the authenticated user
             cart_items = Cart.objects.filter(user=user)
             data = []
             total = 0
@@ -191,7 +185,6 @@ def view_cart(request):
                     item_total = item.product.price * item.quantity
                     total += item_total
                     
-                    # Handle product image URL safely
                     image_url = None
                     if item.product.image:
                         image_url = request.build_absolute_uri(item.product.image.url)
@@ -206,7 +199,6 @@ def view_cart(request):
                         'image': image_url
                     })
                 except Exception as e:
-                    # Skip problematic items but continue processing others
                     continue
             
             return JsonResponse({
@@ -234,7 +226,6 @@ def view_cart(request):
 def remove_from_cart(request, item_id):
     if request.method == 'DELETE':
         try:
-            # Token authentication
             auth_header = request.headers.get('Authorization')
             if not auth_header or not auth_header.startswith('Token '):
                 return JsonResponse({'error': 'Token authentication required'}, status=401)
@@ -246,10 +237,9 @@ def remove_from_cart(request, item_id):
             except Token.DoesNotExist:
                 return JsonResponse({'error': 'Invalid token'}, status=401)
 
-            # Verify the item belongs to the authenticated user
             cart_item = get_object_or_404(Cart, id=item_id, user=user)
             
-            # Delete the item
+        
             cart_item.delete()
             
             return JsonResponse({
@@ -276,7 +266,7 @@ def remove_from_cart(request, item_id):
 def update_cart_item(request, product_id):
     if request.method == 'PUT':
         try:
-            # Token authentication
+            
             auth_header = request.headers.get('Authorization')
             if not auth_header or not auth_header.startswith('Token '):
                 return JsonResponse({'error': 'Token authentication required'}, status=401)
@@ -288,7 +278,7 @@ def update_cart_item(request, product_id):
             except Token.DoesNotExist:
                 return JsonResponse({'error': 'Invalid token'}, status=401)
 
-            # Process request data
+            
             data = json.loads(request.body)
             quantity = data.get('quantity')
             
@@ -329,14 +319,11 @@ def update_cart_item(request, product_id):
 
 
 
-
-
-
 @csrf_exempt
 def place_order(request):
     if request.method == 'POST':
         try:
-            # Token authentication
+            
             auth_header = request.headers.get('Authorization')
             if not auth_header or not auth_header.startswith('Token '):
                 return JsonResponse({'error': 'Token authentication required'}, status=401)
@@ -348,7 +335,7 @@ def place_order(request):
             except Token.DoesNotExist:
                 return JsonResponse({'error': 'Invalid token'}, status=401)
 
-            # Process order
+            
             cart_items = Cart.objects.filter(user=user)
             if not cart_items.exists():
                 return JsonResponse({'error': 'Cart is empty'}, status=400)
@@ -358,7 +345,7 @@ def place_order(request):
             with transaction.atomic():
                 order = Order.objects.create(
                     user=user,
-                    total_amount=total_amount  # No status field
+                    total_amount=total_amount
                 )
                 
                 for item in cart_items:
@@ -388,7 +375,7 @@ def place_order(request):
 def order_history(request):
     if request.method == 'GET':
         try:
-            # Token authentication
+            
             auth_header = request.headers.get('Authorization')
             if not auth_header or not auth_header.startswith('Token '):
                 return JsonResponse({'error': 'Token authentication required'}, status=401)
@@ -405,8 +392,7 @@ def order_history(request):
             
             for order in orders:
                 items = []
-                # USE THE DEFINED RELATED NAME 'items' INSTEAD OF 'orderitem_set'
-                for item in order.items.all():  # This matches your related_name
+                for item in order.items.all():
                     items.append({
                         'product_id': item.product.id,
                         'product_name': item.product.name,
