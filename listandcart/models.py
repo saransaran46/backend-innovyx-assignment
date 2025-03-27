@@ -18,6 +18,8 @@ class Cart(models.Model):
     def __str__(self):
         return f"{self.quantity} of {self.product.name} in {self.user.username}'s cart"
 
+
+
 class Order(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
@@ -25,6 +27,8 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Order #{self.id} by {self.user.username}"
+
+
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, related_name='items', on_delete=models.CASCADE)
