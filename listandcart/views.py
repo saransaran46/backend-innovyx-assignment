@@ -259,61 +259,105 @@ def remove_from_cart(request, item_id):
 
 
 
-
-
 @csrf_exempt
 def update_cart_item(request, product_id):
     if request.method == 'PUT':
         try:
-            
             auth_header = request.headers.get('Authorization')
             if not auth_header or not auth_header.startswith('Token '):
-                return JsonResponse({'error': 'Token authentication required'}, status=401)
+                return JsonResponse(
+                    {'success': False, 'error': 'Token authentication required'}, 
+                    status=401
+                )
             
             token_key = auth_header.split(' ')[1]
             try:
                 token = Token.objects.get(key=token_key)
                 user = token.user
             except Token.DoesNotExist:
-                return JsonResponse({'error': 'Invalid token'}, status=401)
+                return JsonResponse(
+                    {'success': False, 'error': 'Invalid token'}, 
+                    status=401
+                )
 
-            
-            data = json.loads(request.body)
-            quantity = data.get('quantity')
-            
-            if quantity is None:
-                return JsonResponse({'error': 'Quantity is required'}, status=400)
-            
-            quantity = int(quantity)
-            cart_item = get_object_or_404(Cart, product_id=product_id, user=user)
-            
-            if quantity <= 0:
-                cart_item.delete()
-                return JsonResponse({'success': True, 'message': 'Item removed from cart'})
+            try:
+                data = json.loads(request.body)
+                quantity = data.get('quantity')
                 
-            cart_item.quantity = quantity
-            cart_item.save()
-            
-            product = cart_item.product
-            item_total = product.price * quantity
-            
-            return JsonResponse({
-                'success': True,
-                'product_id': product_id,
-                'quantity': quantity,
-                'item_total': str(item_total),
-                'product_name': product.name,
-                'unit_price': str(product.price)
-            })
+                if quantity is None:
+                    return JsonResponse(
+                        {'success': False, 'error': 'Quantity is required'},
+                        status=400
+                    )
                 
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON data'}, status=400)
-        except ValueError:
-            return JsonResponse({'error': 'Quantity must be a number'}, status=400)
+                quantity = int(quantity)
+                if quantity < 0:
+                    return JsonResponse(
+                        {'success': False, 'error': 'Quantity cannot be negative'},
+                        status=400
+                    )
+                
+                product = get_object_or_404(Product, id=product_id)
+                cart_item, created = Cart.objects.get_or_create(
+                    user=user,
+                    product=product,
+                    defaults={'quantity': quantity}
+                )
+                
+                if not created:
+                    if quantity == 0:
+                        cart_item.delete()
+                        return JsonResponse({
+                            'success': True,
+                            'action': 'removed',
+                            'product_id': product_id,
+                            'quantity': 0,
+                            'message': 'Item removed from cart'
+                        })
+                    else:
+                        cart_item.quantity = quantity
+                        cart_item.save()
+                
+                response_data = {
+                    'success': True,
+                    'action': 'updated' if quantity > 0 else 'removed',
+                    'product_id': product_id,
+                    'product_name': product.name,
+                    'quantity': quantity,
+                    'unit_price': str(product.price),
+                    'item_total': str(product.price * quantity),
+                    'image': request.build_absolute_uri(product.image.url) if product.image else None
+                }
+                
+                return JsonResponse(response_data)
+                
+            except json.JSONDecodeError:
+                return JsonResponse(
+                    {'success': False, 'error': 'Invalid JSON data'},
+                    status=400
+                )
+            except ValueError:
+                return JsonResponse(
+                    {'success': False, 'error': 'Quantity must be a valid number'},
+                    status=400
+                )
+            except Product.DoesNotExist:
+                return JsonResponse(
+                    {'success': False, 'error': 'Product not found'},
+                    status=404
+                )
+                
         except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
+            return JsonResponse(
+                {'success': False, 'error': str(e)},
+                status=500
+            )
     
-    return JsonResponse({'error': 'Only PUT method is allowed'}, status=405)
+    return JsonResponse(
+        {'success': False, 'error': 'Only PUT method is allowed'},
+        status=405
+    )
+
 
 
 
